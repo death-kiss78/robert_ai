@@ -1,0 +1,269 @@
+name: Build Boards
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Board folder name (ex: bread-compact-wifi)"
+        required: true
+        default: "maria-ai"
+
+      variant:
+        description: "Variant name from config.json (ex: bread-compact-wifi-128x64)"
+        required: true
+        default: "maria-ai"
+
+  push:
+    branches:
+      - main
+      - ci/*
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Determine variants to build
+    runs-on: ubuntu-latest
+    outputs:
+      variants: ${{ steps.select.outputs.variants }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - id: list
+        name: Get all variant list
+        run: |
+          echo "all_variants=$(python scripts/release.py --list-boards --json)" >> $GITHUB_OUTPUT
+
+      - id: select
+        name: Select variants based on changes
+        env:
+          ALL_VARIANTS: ${{ steps.list.outputs.all_variants }}
+        run: |
+          EVENT_NAME="${{ github.event_name }}"
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            BOARD="${{ github.event.inputs.board }}"
+            VARIANT="${{ github.event.inputs.variant }}"
+
+            # FIX: prevent duplicated names like maria-ai_maria-ai
+            if [[ "$BOARD" == "$VARIANT" ]]; then
+              FULL="$BOARD"
+            else
+              FULL="${BOARD}_${VARIANT}"
+            fi
+
+            echo "Manual build for board: $BOARD variant: $VARIANT"
+            echo "variants=[{\"board\":\"$BOARD\",\"name\":\"$VARIANT\",\"full_name\":\"$FULL\"}]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          CHANGED=$(git diff --name-only $BASE_SHA $HEAD_SHA || true)
+
+          NEED_ALL=0
+          declare -A AFFECTED
+
+          while IFS= read -r file; do
+            if [[ "$file" == main/* && "$file" != main/boards/* ]]; then
+              NEED_ALL=1
+            fi
+
+            if [[ "$file" == main/boards/common/* ]]; then
+              NEED_ALL=1
+            fi
+
+            if [[ "$file" == main/boards/* ]]; then
+              board=$(echo "$file" | cut -d '/' -f3)
+              AFFECTED[$board]=1
+            fi
+          done <<< "$CHANGED"
+
+          if [[ "$NEED_ALL" -eq 1 ]]; then
+            echo "variants=$ALL_VARIANTS" >> $GITHUB_OUTPUT
+          else
+            if [[ ${#AFFECTED[@]} -eq 0 ]]; then
+              echo "variants=[]" >> $GITHUB_OUTPUT
+            else
+              BOARDS_JSON=$(printf '%s\n' "${!AFFECTED[@]}" | sort -u | jq -R -s -c 'split("\n")[:-1]')
+              FILTERED=$(echo "$ALL_VARIANTS" | jq -c --argjson boards "$BOARDS_JSON" 'map(select(.board as $b | $boards | index($b)))')
+              echo "variants=$FILTERED" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  build:
+    name: Build ${{ matrix.full_name }}
+    needs: prepare
+    if: ${{ needs.prepare.outputs.variants != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.variants) }}
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0.2
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      board: ${{ matrix.board }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from CMakeLists
+        id: version
+        run: |
+          VERSION=$(grep -oP 'set\(PROJECT_VER\s+"(\K[^"]+)' CMakeLists.txt)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build current variant
+        shell: bash
+        run: |
+          source $IDF_PATH/export.sh
+          python scripts/release.py ${{ matrix.board }} --name ${{ matrix.name }}
+
+      - name: List build folder (debug)
+        run: ls -R ${{ github.workspace }}/build || echo "No build folder found"
+
+      - name: Upload artifacts
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaozhi_${{ matrix.full_name }}_${{ github.sha }}
+          path: ${{ github.workspace }}/build/*.bin
+          if-no-files-found: error
+
+      - name: Send Telegram notification (manual only)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          STATUS="Build completed successfully"
+          if [ "${{ job.status }}" != "success" ]; then
+            STATUS="Build FAILED"
+          fi
+
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="🏗 Build Status\nBoard: ${{ matrix.board }}\nVariant: ${{ matrix.name }}\nStatus: $STATUS\nDownload: ${{ steps.upload.outputs.artifact-url }}"
+
+  finalize-release:
+    name: Finalize Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python deps
+        run: |
+          pip install requests python-dotenv
+
+      - name: Remove old ZIPs (force overwrite)
+        run: |
+          rm -f releases/${{ needs.build.outputs.version }}/*.zip || true
+
+      - name: Run release finalizer (always downloads ZIP)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/download_github_runs.py \
+            "${{ needs.build.outputs.version }}" \
+            "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          TAG="v${VERSION}"
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping creation."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Commit release files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add releases/
+          git diff --cached --quiet || git commit -m "Release ${{ needs.build.outputs.version }}"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: "Release ${{ needs.build.outputs.version }}"
+          body: "Automated release for version ${{ needs.build.outputs.version }}"
+          files: releases/${{ needs.build.outputs.version }}/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # OTA SECTION
+      - name: Prepare OTA folder
+        run: |
+          mkdir -p ota
+
+      - name: Extract merged-binary.bin from ZIP
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          BOARD="${{ needs.build.outputs.board }}"
+          ZIP="releases/${VERSION}/v${VERSION}_${BOARD}.zip"
+
+          echo "Extracting $ZIP"
+          mkdir temp_ota
+          unzip -o "$ZIP" -d temp_ota
+
+          echo "Copying merged-binary.bin"
+          cp temp_ota/merged-binary.bin "ota/v${VERSION}_${BOARD}.bin"
+
+          echo "Cleaning temp"
+          rm -rf temp_ota
+
+      - name: Generate OTA version (timestamp)
+        id: otaver
+        run: |
+          VERSION=$(date +"%Y.%m.%d.%H.%M.%S")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Write ota.json
+        run: |
+          FW_VER="${{ needs.build.outputs.version }}"
+          BOARD="${{ needs.build.outputs.board }}"
+
+          echo "{" > ota/ota.json
+          echo "  \"firmware\": {" >> ota/ota.json
+          echo "    \"version\": \"$FW_VER\"," >> ota/ota.json
+          echo "    \"url\": \"https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/ota/v${FW_VER}_${BOARD}.bin\"" >> ota/ota.json
+          echo "  }" >> ota/ota.json
+          echo "}" >> ota/ota.json
+
+      - name: Commit OTA files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add ota/
+          git diff --cached --quiet || git commit -m "Update OTA for version ${{ needs.build.outputs.version }}"
+          git push

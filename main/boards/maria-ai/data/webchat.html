@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebChat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" type="image/svg+xml" href="img/webchat.svg">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+
+<div align="center">
+  <img src="img/xiao.jpg" width="70%"><br>
+</div>
+
+<div class="container" align="center">
+
+  <h1>WebChat</h1>
+
+  <!-- CHAT WINDOW -->
+  <div id="chat-window" class="chat-window">
+      <div id="chat-messages" class="chat-messages"></div>
+  </div>
+
+  <!-- INPUT AREA -->
+  <div class="chat-input-area">
+      <input id="chat_input" type="text" placeholder="Scrie un mesaj..." class="chat-input">
+      <button onclick="sendText()" class="chat-send-btn">
+          <span class="material-icons">send</span>
+      </button>
+  </div>
+
+  <!-- WAKE BUTTON -->
+  <button onclick="wakeXiao()" class="wake-btn">
+      <span class="material-icons">campaign</span> Wake Xiao
+  </button>
+
+  <div class='arm-block'>
+      <span>Powered by &copy; DeaTh KiSS part of AV3NTURA&trade;</span>
+  </div>
+
+</div>
+
+<br>
+
+<div align="center">
+    <img src="img/home.svg" width="40"> 
+    <button onclick="location.href='index.html'">Home</button>
+</div>
+
+<script>
+/************************************************************
+ *  WEBSOCKET
+ ************************************************************/
+let ws = null;
+
+function initWebSocket() {
+    ws = new WebSocket("ws://" + window.location.host + "/ws");
+
+    ws.onopen = () => {
+        console.log("WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === "xiao_reply") {
+            addMessage("Xiao", data.content);
+        }
+    };
+
+    ws.onclose = () => {
+        console.log("WebSocket closed, retrying...");
+        setTimeout(initWebSocket, 2000);
+    };
+}
+
+initWebSocket();
+
+/************************************************************
+ *  CHAT UI
+ ************************************************************/
+function addMessage(sender, text) {
+    const box = document.getElementById("chat-messages");
+
+    const bubble = document.createElement("div");
+    bubble.className = sender === "Xiao" ? "bubble bubble-xiao" : "bubble bubble-user";
+    bubble.innerText = sender + ": " + text;
+
+    box.appendChild(bubble);
+    box.scrollTop = box.scrollHeight;
+}
+
+/************************************************************
+ *  SEND TEXT TO ESP32
+ ************************************************************/
+function sendText() {
+    const msg = document.getElementById("chat_input").value.trim();
+    if (!msg) return;
+
+    addMessage("Tu", msg);
+
+    fetch("/chat/send", {
+        method: "POST",
+        body: JSON.stringify({ message: msg })
+    });
+
+    document.getElementById("chat_input").value = "";
+}
+
+/************************************************************
+ *  WAKE XIAO
+ ************************************************************/
+function wakeXiao() {
+    fetch("/chat/wake", { method: "POST" });
+    addMessage("System", "Xiao a fost trezit.");
+}
+</script>
+
+<button class="refresh-btn" onclick="location.reload()">&#128260;</button>
+
+<button style="width:42px;" class="reset-sticky" onclick="resetAndReload()">&#128260; RST</button>
+
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="img/ftp.svg">
+<link rel="stylesheet" href="css/style.css">
+<title>ESP32 File Manager (SD Card)</title>
+
+<style>
+body { font-family: Arial; background:#222; color:#eee; padding:20px; }
+#path { font-weight:bold; margin-bottom:10px; }
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+td { padding:6px; border-bottom:1px solid #444; }
+tr:hover { background:#333; cursor:pointer; }
+button { margin:5px; padding:6px 12px; }
+#pagination { margin-top:10px; }
+</style>
+</head>
+
+<body>
+<div align="center">
+  <img src="img/xiao.jpg" width="70%"><br>
+</div>
+<h2>Robert AI File Manager</h2>
+<div id="storageStatus" style="margin:10px; font-size:14px; color:#ccc;">
+    Checking storage...
+</div>
+
+<div id="path">/</div>
+
+<button id="btnUp">⬆ Up</button>
+<button id="btnMkdir">📁 New Folder</button>
+
+<input type="file" id="uploadInput">
+<button id="btnUpload">⬆ Upload</button>
+
+<table id="fileTable"></table>
+<div id="pagination"></div>
+
+<script>
+let currentPath = "/";
+let page = 1;
+const perPage = 25;
+let fullList = [];
+
+// API helper — TEXT pentru toate operațiile NON-JSON
+function apiText(url) {
+    return fetch(url).then(r => r.text());
+}
+
+// API helper — JSON doar pentru LIST
+function apiJson(url) {
+    return fetch(url).then(r => r.json());
+}
+
+// LIST
+async function loadDir(path = currentPath) {
+    currentPath = path;
+    document.getElementById("path").innerText = currentPath;
+    page = 1;
+
+    let list = await apiJson(`/sd/list?path=${encodeURIComponent(path)}`);
+
+    list.sort((a, b) => {
+        if (a.type === "dir" && b.type !== "dir") return -1;
+        if (a.type !== "dir" && b.type === "dir") return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    fullList = list;
+    renderPage();
+}
+
+function renderPage() {
+    let start = (page - 1) * perPage;
+    let slice = fullList.slice(start, start + perPage);
+
+    let html = "";
+    slice.forEach(item => {
+        html += `
+            <tr data-name="${item.name}" data-type="${item.type}">
+                <td>${item.type === "dir" ? "📁" : "📄"} ${item.name}</td>
+                <td>${item.type === "file" ? item.size + " bytes" : ""}</td>
+                <td>
+                    <button class="btnRename" data-name="${item.name}">Rename</button>
+                    <button class="btnDelete" data-name="${item.name}">Delete</button>
+                    ${item.type === "file" ? `<button class="btnDownload" data-name="${item.name}">Download</button>` : ""}
+                </td>
+            </tr>`;
+    });
+
+    document.getElementById("fileTable").innerHTML = html;
+    attachRowEvents();
+    renderPaginationControls();
+}
+
+function attachRowEvents() {
+    document.querySelectorAll("#fileTable tr").forEach(tr => {
+        tr.addEventListener("click", () => {
+            let name = tr.dataset.name;
+            let type = tr.dataset.type;
+            if (type === "dir") {
+                let newPath = currentPath.endsWith("/") ? currentPath + name : currentPath + "/" + name;
+                loadDir(newPath);
+            }
+        });
+    });
+
+    document.querySelectorAll(".btnRename").forEach(btn => {
+        btn.addEventListener("click", e => {
+            e.stopPropagation();
+            renameItem(btn.dataset.name);
+        });
+    });
+
+    document.querySelectorAll(".btnDelete").forEach(btn => {
+        btn.addEventListener("click", e => {
+            e.stopPropagation();
+            deleteItem(btn.dataset.name);
+        });
+    });
+
+    document.querySelectorAll(".btnDownload").forEach(btn => {
+        btn.addEventListener("click", e => {
+            e.stopPropagation();
+            downloadItem(btn.dataset.name);
+        });
+    });
+}
+
+function renderPaginationControls() {
+    let totalPages = Math.ceil(fullList.length / perPage);
+    if (totalPages <= 1) {
+        document.getElementById("pagination").innerHTML = "";
+        return;
+    }
+
+    document.getElementById("pagination").innerHTML =
+        `<button id="btnPrev" ${page===1?"disabled":""}>Prev</button>
+         Page ${page} / ${totalPages}
+         <button id="btnNext" ${page===totalPages?"disabled":""}>Next</button>`;
+
+    document.getElementById("btnPrev").onclick = () => { page--; renderPage(); };
+    document.getElementById("btnNext").onclick = () => { page++; renderPage(); };
+}
+
+function goUp() {
+    if (currentPath === "/") return;
+    let parts = currentPath.split("/");
+    parts.pop();
+    let newPath = parts.join("/") || "/";
+    loadDir(newPath);
+}
+
+function mkdir() {
+    let name = prompt("Folder name:");
+    if (!name) return;
+
+    let path = currentPath.endsWith("/") ? currentPath + name : currentPath + "/" + name;
+    apiText(`/sd/mkdir?path=${encodeURIComponent(path)}`).then(() => loadDir());
+}
+
+function deleteItem(name) {
+    if (!confirm("Delete? (recursive for folders)")) return;
+
+    let path = currentPath.endsWith("/") ? currentPath + name : currentPath + "/" + name;
+    apiText(`/sd/delete?path=${encodeURIComponent(path)}`).then(() => loadDir());
+}
+
+function renameItem(name) {
+    let newName = prompt("New name:", name);
+    if (!newName) return;
+
+    let oldPath = currentPath.endsWith("/") ? currentPath + name : currentPath + "/" + name;
+    let newPath = currentPath.endsWith("/") ? currentPath + newName : currentPath + "/" + newName;
+
+    apiText(`/sd/rename?old=${encodeURIComponent(oldPath)}&new=${encodeURIComponent(newPath)}`).then(() => loadDir());
+}
+
+function downloadItem(name) {
+    let path = currentPath.endsWith("/") ? currentPath + name : currentPath + "/" + name;
+    window.location = `/sd/download?file=${encodeURIComponent(path)}`;
+}
+
+function uploadFile() {
+    let file = document.getElementById("uploadInput").files[0];
+    if (!file) return alert("Selectează un fișier!");
+
+    fetch(`/sd/upload?path=${encodeURIComponent(currentPath)}&name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/octet-stream"
+        },
+        body: file
+    })
+    .then(r => r.text())
+    .then(() => { alert("✔ Upload reușit!"); loadDir(); })
+    .catch(() => alert("❌ Upload eșuat!"));
+}
+
+document.getElementById("btnUp").onclick = goUp;
+document.getElementById("btnMkdir").onclick = mkdir;
+document.getElementById("btnUpload").onclick = uploadFile;
+
+loadDir();
+</script>
+
+<br>
+<div align="center">
+    <img src="img/home.svg" width="40"> <button onclick="location.href='index.html'">Home</button>
+</div>
+
+<script>
+function updateStorageStatus() {
+    fetch("/sd/info")
+        .then(r => r.json())
+        .then(info => {
+            document.getElementById("storageStatus").innerHTML =
+                `<b>SD Card:</b> Used ${formatBytes(info.used)} / Free ${formatBytes(info.free)} / Total ${formatBytes(info.total)}`;
+        })
+        .catch(() => {
+            document.getElementById("storageStatus").innerText = "Storage info unavailable";
+        });
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+updateStorageStatus();
+</script>
+
+<button class="refresh-btn" onclick="location.reload()">&#128260;</button>
+<button style="width:60px;" class="reset-sticky" onclick="resetAndReload()">&#128260; RST</button>
+<script src="js/script.js"></script>
+
+</body>
+</html>

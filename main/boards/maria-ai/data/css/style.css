@@ -1,0 +1,230 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: #f2f2f2;
+    color: #333;
+}
+
+.container {
+    max-width: 420px;
+    margin: 40px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 0 12px rgba(0,0,0,0.1);
+}
+
+h1, h2 {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+button {
+    padding: 12px;
+    margin-top: 10px;
+    background: #0078ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #005fcc;
+}
+
+#networks {
+    margin-top: 20px;
+}
+
+.network-item {
+    padding: 10px;
+    background: #e9e9e9;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.network-item:hover {
+    background: #dcdcdc;
+}
+
+#connectSection {
+    margin-top: 20px;
+}
+
+input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+}
+
+#statusBox {
+    margin-top: 25px;
+    padding: 15px;
+    background: #fafafa;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+#statusText {
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.arm-block {
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+  padding: 10px;
+  border: 1px solid #444;
+  background: yellow;
+  border-radius: 10px;
+  align: center;
+}
+
+
+.refresh-btn {
+  position: fixed;
+  top: 15px;
+  right: 15px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #222;
+  color: white;
+  font-size: 22px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(0,0,0,0.4);
+  cursor: pointer;
+  z-index: 9999;
+}
+
+.refresh-btn:active {
+  transform: scale(0.9);
+}
+
+.reset-sticky {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: yellow;
+  color: black;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 9999;
+}
+.reset-sticky:hover {
+  background: #ffd900;
+}
+
+
+/************************************************************
+ * CHAT WINDOW
+ ************************************************************/
+.chat-window {
+    width: 90%;
+    max-width: 500px;
+    height: 350px;
+    border: 2px solid #444;
+    border-radius: 10px;
+    overflow-y: auto;
+    background: #111;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+/************************************************************
+ * CHAT MESSAGES
+ ************************************************************/
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/************************************************************
+ * CHAT BUBBLES
+ ************************************************************/
+.bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 80%;
+    font-size: 16px;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+.bubble-user {
+    background: #2b6eff;
+    color: white;
+    align-self: flex-end;
+}
+
+.bubble-xiao {
+    background: #333;
+    color: #eee;
+    align-self: flex-start;
+}
+
+/************************************************************
+ * INPUT AREA
+ ************************************************************/
+.chat-input-area {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.chat-input {
+    width: 70%;
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+}
+
+.chat-send-btn {
+    padding: 10px 14px;
+    background: #0078ff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.chat-send-btn:hover {
+    background: #005fcc;
+}
+
+/************************************************************
+ * WAKE BUTTON
+ ************************************************************/
+.wake-btn {
+    padding: 12px 20px;
+    background: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+
+.wake-btn:hover {
+    background: #e68a00;
+}
