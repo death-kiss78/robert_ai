@@ -125,7 +125,7 @@ void SingleLed::StartRainbow() {
     esp_timer_stop(blink_timer_);
 
     blink_counter_ = BLINK_INFINITE;
-    blink_interval_ms_ = 20;  // viteză smooth
+    blink_interval_ms_ = 50;  // viteză smooth
 
     esp_timer_start_periodic(blink_timer_, blink_interval_ms_ * 1000);
 }
