@@ -9,12 +9,12 @@
 #include "button.h"
 #include "codecs/es8311_audio_codec.h"
 #include "config.h"
-#include "sensors/dht_sensor.h"
+#include "dht_sensor.h"
 #include "display/lcd_display.h"
-#include "web/http_server.h"
+#include "http_server.h"
 #include "lamp_controller.h"
 #include "mcp_server.h"
-#include "drivers/sd_card.h"
+#include "sd_card.h"
 #include "wifi_board.h"
 
 #include <driver/i2c_master.h>
