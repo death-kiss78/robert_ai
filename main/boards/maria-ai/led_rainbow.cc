@@ -1,8 +1,8 @@
 #include "led_rainbow.h"
 #include "application.h"
-#include <esp_log.h> 
+#include <esp_log.h>
 
-#define TAG "SingleLed"
+#define TAG "SingleLedRainbow"
 
 #define DEFAULT_BRIGHTNESS 100
 #define HIGH_BRIGHTNESS 255
@@ -10,7 +10,7 @@
 
 #define BLINK_INFINITE -1
 
-// 🔥 Conversie HSV → RGB
+// HSV → RGB
 static void hsvToRgb(uint16_t h, uint8_t s, uint8_t v,
                      uint8_t &r, uint8_t &g, uint8_t &b)
 {
@@ -31,9 +31,9 @@ static void hsvToRgb(uint16_t h, uint8_t s, uint8_t v,
     }
 }
 
-SingleLed::SingleLed(gpio_num_t gpio) {
+SingleLedRainbow::SingleLedRainbow(gpio_num_t gpio) {
     if (gpio == GPIO_NUM_NC) {
-        ESP_LOGW(TAG, "SingleLed initialized with GPIO_NUM_NC, LED will not function");
+        ESP_LOGW(TAG, "SingleLedRainbow initialized with GPIO_NUM_NC, LED will not function");
         return;
     }
 
@@ -44,14 +44,14 @@ SingleLed::SingleLed(gpio_num_t gpio) {
     strip_config.led_model = LED_MODEL_WS2812;
 
     led_strip_rmt_config_t rmt_config = {};
-    rmt_config.resolution_hz = 10 * 1000 * 1000; // 10MHz
+    rmt_config.resolution_hz = 10 * 1000 * 1000;
 
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip_));
     led_strip_clear(led_strip_);
 
     esp_timer_create_args_t blink_timer_args = {
         .callback = [](void *arg) {
-            auto led = static_cast<SingleLed*>(arg);
+            auto led = static_cast<SingleLedRainbow*>(arg);
             led->OnBlinkTimer();
         },
         .arg = this,
@@ -62,7 +62,7 @@ SingleLed::SingleLed(gpio_num_t gpio) {
     ESP_ERROR_CHECK(esp_timer_create(&blink_timer_args, &blink_timer_));
 }
 
-SingleLed::~SingleLed() {
+SingleLedRainbow::~SingleLedRainbow() {
     if (blink_timer_ != nullptr) {
         esp_timer_stop(blink_timer_);
     }
@@ -71,13 +71,13 @@ SingleLed::~SingleLed() {
     }
 }
 
-void SingleLed::SetColor(uint8_t r, uint8_t g, uint8_t b) {
+void SingleLedRainbow::SetColor(uint8_t r, uint8_t g, uint8_t b) {
     r_ = r;
     g_ = g;
     b_ = b;
 }
 
-void SingleLed::TurnOn() {
+void SingleLedRainbow::TurnOn() {
     if (led_strip_ == nullptr) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
@@ -86,7 +86,7 @@ void SingleLed::TurnOn() {
     led_strip_refresh(led_strip_);
 }
 
-void SingleLed::TurnOff() {
+void SingleLedRainbow::TurnOff() {
     if (led_strip_ == nullptr) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
@@ -94,19 +94,19 @@ void SingleLed::TurnOff() {
     led_strip_clear(led_strip_);
 }
 
-void SingleLed::BlinkOnce() {
+void SingleLedRainbow::BlinkOnce() {
     Blink(1, 100);
 }
 
-void SingleLed::Blink(int times, int interval_ms) {
+void SingleLedRainbow::Blink(int times, int interval_ms) {
     StartBlinkTask(times, interval_ms);
 }
 
-void SingleLed::StartContinuousBlink(int interval_ms) {
+void SingleLedRainbow::StartContinuousBlink(int interval_ms) {
     StartBlinkTask(BLINK_INFINITE, interval_ms);
 }
 
-void SingleLed::StartBlinkTask(int times, int interval_ms) {
+void SingleLedRainbow::StartBlinkTask(int times, int interval_ms) {
     if (led_strip_ == nullptr) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
@@ -117,23 +117,21 @@ void SingleLed::StartBlinkTask(int times, int interval_ms) {
     esp_timer_start_periodic(blink_timer_, interval_ms * 1000);
 }
 
-// 🔥 Funcția pentru efectul rainbow
-void SingleLed::StartRainbow() {
+void SingleLedRainbow::StartRainbow() {
     if (led_strip_ == nullptr) return;
 
     std::lock_guard<std::mutex> lock(mutex_);
     esp_timer_stop(blink_timer_);
 
     blink_counter_ = BLINK_INFINITE;
-    blink_interval_ms_ = 50;  // viteză smooth
+    blink_interval_ms_ = 50;
 
     esp_timer_start_periodic(blink_timer_, blink_interval_ms_ * 1000);
 }
 
-void SingleLed::OnBlinkTimer() {
+void SingleLedRainbow::OnBlinkTimer() {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    // 🔥 RAINBOW MODE
     if (blink_counter_ == BLINK_INFINITE) {
         uint8_t r, g, b;
         hsvToRgb(rainbow_hue_, 255, HIGH_BRIGHTNESS, r, g, b);
@@ -144,7 +142,6 @@ void SingleLed::OnBlinkTimer() {
         return;
     }
 
-    // 🔥 BLINK NORMAL
     blink_counter_--;
     if (blink_counter_ & 1) {
         led_strip_set_pixel(led_strip_, 0, r_, g_, b_);
@@ -157,7 +154,7 @@ void SingleLed::OnBlinkTimer() {
     }
 }
 
-void SingleLed::OnStateChanged() {
+void SingleLedRainbow::OnStateChanged() {
     auto& app = Application::GetInstance();
     auto device_state = app.GetDeviceState();
 
@@ -173,7 +170,7 @@ void SingleLed::OnStateChanged() {
             break;
 
         case kDeviceStateIdle:
-            StartRainbow();   // 🔥 RAINBOW în IDLE
+            StartRainbow();
             break;
 
         case kDeviceStateConnecting:
@@ -183,11 +180,7 @@ void SingleLed::OnStateChanged() {
 
         case kDeviceStateListening:
         case kDeviceStateAudioTesting:
-            if (app.IsVoiceDetected()) {
-                SetColor(0, 0, HIGH_BRIGHTNESS);
-            } else {
-                SetColor(0, 0, HIGH_BRIGHTNESS);
-            }
+            SetColor(0, 0, HIGH_BRIGHTNESS);
             TurnOn();
             break;
 
