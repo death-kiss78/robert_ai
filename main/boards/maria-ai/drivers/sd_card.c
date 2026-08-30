@@ -1,7 +1,7 @@
 // sd_card.c
 
 #include "sd_card.h"
-#include "config.h"
+#include "../config.h"
 #include "driver/sdmmc_host.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
