@@ -1,5 +1,5 @@
 #pragma once
-#include "../config.h"
+#include "config.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
 

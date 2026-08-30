@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../config.h"
-#include "drivers/dht11.h"
+#include "config.h"
+#include "dht11.h"
 #include "mcp_server.h"
 
 class DhtSensor {
