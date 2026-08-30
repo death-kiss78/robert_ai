@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config.h"
+#include "../config.h"
 #include "drivers/dht11.h"
 #include "mcp_server.h"
 
