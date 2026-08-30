@@ -26,7 +26,7 @@
 #include <wifi_manager.h>
 
 #include "esp_lcd_ili9341.h"
-#include "led/single_led.h"
+#include "led_rainbow.h"
 #include "system_reset.h"
 
 #define TAG "MariaAi"
