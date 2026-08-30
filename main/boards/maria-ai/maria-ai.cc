@@ -9,12 +9,12 @@
 #include "button.h"
 #include "codecs/es8311_audio_codec.h"
 #include "config.h"
-#include "dht_sensor.h"
+#include "sensors/dht_sensor.h"
 #include "display/lcd_display.h"
-#include "http_server.h"
+#include "web/http_server.h"
 #include "lamp_controller.h"
 #include "mcp_server.h"
-#include "sd_card.h"
+#include "drivers/sd_card.h"
 #include "wifi_board.h"
 
 #include <driver/i2c_master.h>
@@ -78,7 +78,6 @@ private:
     Button volume_down_button_;
     Button backlight_up_button_;
     Button backlight_down_button_;
-    // Callbacks pentru PCF
     std::function<void()> cb_volume_up_;
     std::function<void()> cb_volume_down_;
     std::function<void()> cb_backlight_up_;
@@ -88,6 +87,8 @@ private:
     i2c_master_bus_handle_t codec_i2c_bus_;
     TouchDriver touch_;
     AdcBatteryMonitor* adc_battery_monitor_;
+
+    DhtSensor dht_{DHT11_PIN};   // 🔥 DHT ca membru
 
     bool web_server_started_ = false;
 
@@ -103,9 +104,6 @@ private:
 
             ESP_LOGI(TAG, "WebServerTask: config=%d, connected=%d", (int)config, (int)connected);
 
-            // Pornim serverul doar cÃ¢nd:
-            // - NU suntem Ã®n config mode (hotspot)
-            // - suntem conectaÈ›i la router
             if (!config && connected) {
                 ESP_LOGI(TAG, "Conditions met. Starting WebServer");
 
@@ -132,35 +130,15 @@ private:
             uint8_t state = 0xFF;
 
             if (i2c_master_receive(pcf_dev, &state, 1, 50) == ESP_OK) {
-                uint8_t changed = last_state ^ state;  // ce s-a schimbat
-                uint8_t pressed = changed & (~state);  // detectăm impuls LOW
+                uint8_t changed = last_state ^ state;
+                uint8_t pressed = changed & (~state);
 
-                // 🔥 VOLUME UP
-                if (pressed & (1 << PCF_BTN_UP)) {
-                    self->cb_volume_up_();
-                }
+                if (pressed & (1 << PCF_BTN_UP)) self->cb_volume_up_();
+                if (pressed & (1 << PCF_BTN_DOWN)) self->cb_volume_down_();
+                if (pressed & (1 << PCF_BTN_RIGHT)) self->cb_backlight_up_();
+                if (pressed & (1 << PCF_BTN_LEFT)) self->cb_backlight_down_();
+                if (pressed & (1 << PCF_BTN_MIDDLE)) self->cb_boot_();
 
-                // 🔥 VOLUME DOWN
-                if (pressed & (1 << PCF_BTN_DOWN)) {
-                    self->cb_volume_down_();
-                }
-
-                // 🔥 BACKLIGHT UP
-                if (pressed & (1 << PCF_BTN_RIGHT)) {
-                    self->cb_backlight_up_();
-                }
-
-                // 🔥 BACKLIGHT DOWN
-                if (pressed & (1 << PCF_BTN_LEFT)) {
-                    self->cb_backlight_down_();
-                }
-
-                // 🔥 MIDDLE = BOOT BUTTON LOGIC
-if (pressed & (1 << PCF_BTN_MIDDLE)) {
-    self->cb_boot_();
-}
-
-                // 🔥 RESET BUTTON (software reset)
                 if (pressed & (1 << PCF_BTN_RST)) {
                     self->GetDisplay()->ShowNotification("Restart...");
                     esp_restart();
@@ -187,7 +165,7 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
         bool down = false;
         uint16_t last_y = 0;
         bool is_sliding = false;
-        int slide_mode = 0;  // 1: brightness, 2: volume
+        int slide_mode = 0;
 
         while (true) {
             bool t;
@@ -201,28 +179,22 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
                         down_start = now;
                         last_y = y;
                         is_sliding = false;
-                        // Map touch coordinates to display orientation
-                        if (x < 60)
-                            slide_mode = 1;
-                        else if (x > 180)
-                            slide_mode = 2;
-                        else
-                            slide_mode = 0;
+
+                        if (x < 60) slide_mode = 1;
+                        else if (x > 180) slide_mode = 2;
+                        else slide_mode = 0;
+
                     } else {
-                        // Slide detection
                         int dy = (int)y - (int)last_y;
                         if (std::abs(dy) > 10) {
                             if (slide_mode == 1) {
                                 is_sliding = true;
                                 int b = self->GetBacklight()->brightness();
                                 b -= dy / 5;
-                                if (b < 1)
-                                    b = 1;
-                                if (b > 100)
-                                    b = 100;
+                                if (b < 1) b = 1;
+                                if (b > 100) b = 100;
                                 self->GetBacklight()->SetBrightness(b);
 
-                                // Afișează luminozitatea pe display
                                 char msg[32];
                                 snprintf(msg, sizeof(msg), "Luminozitate: %d%%", b);
                                 self->GetDisplay()->ShowNotification(msg);
@@ -232,13 +204,10 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
                                 auto codec = self->GetAudioCodec();
                                 int v = codec->output_volume();
                                 v -= dy / 5;
-                                if (v < 0)
-                                    v = 0;
-                                if (v > 100)
-                                    v = 100;
+                                if (v < 0) v = 0;
+                                if (v > 100) v = 100;
                                 codec->SetOutputVolume(v);
 
-                                // Afișează volumul pe display
                                 char msg[32];
                                 snprintf(msg, sizeof(msg), "Volum: %d%%", v);
                                 self->GetDisplay()->ShowNotification(msg);
@@ -284,10 +253,7 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
             .glitch_ignore_cnt = 7,
             .intr_priority = 0,
             .trans_queue_depth = 0,
-            .flags =
-                {
-                    .enable_internal_pullup = 1,
-                },
+            .flags = { .enable_internal_pullup = 1 },
         };
         ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_cfg, &codec_i2c_bus_));
     }
@@ -314,12 +280,11 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
         };
 
         boot_button_.OnClick(cb_boot_);
-		
+
         cb_volume_up_ = [this]() {
             auto codec = GetAudioCodec();
             auto volume = codec->output_volume() + 10;
-            if (volume > 100)
-                volume = 100;
+            if (volume > 100) volume = 100;
             GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume / 10));
             codec->SetOutputVolume(volume);
         };
@@ -334,8 +299,7 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
         cb_volume_down_ = [this]() {
             auto codec = GetAudioCodec();
             auto volume = codec->output_volume() - 10;
-            if (volume < 0)
-                volume = 0;
+            if (volume < 0) volume = 0;
             codec->SetOutputVolume(volume);
             GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(volume / 10));
         };
@@ -347,12 +311,10 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
             GetDisplay()->ShowNotification(Lang::Strings::MUTED);
         });
 
-        // 🔥 BACKLIGHT UP BUTTON
         cb_backlight_up_ = [this]() {
             auto backlight = GetBacklight();
             int b = backlight->brightness() + 10;
-            if (b > 100)
-                b = 100;
+            if (b > 100) b = 100;
             backlight->SetBrightness(b);
             GetDisplay()->ShowNotification("Luminozitate: " + std::to_string(b) + "%");
         };
@@ -365,12 +327,10 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
             GetDisplay()->ShowNotification("Luminozitate MAX");
         });
 
-        // 🔥 BACKLIGHT DOWN BUTTON
         cb_backlight_down_ = [this]() {
             auto backlight = GetBacklight();
             int b = backlight->brightness() - 10;
-            if (b < 1)
-                b = 1;
+            if (b < 1) b = 1;
             backlight->SetBrightness(b);
             GetDisplay()->ShowNotification("Luminozitate: " + std::to_string(b) + "%");
         };
@@ -387,7 +347,7 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
     void InitializeLcdDisplay() {
         esp_lcd_panel_io_handle_t panel_io = nullptr;
         esp_lcd_panel_handle_t panel = nullptr;
-        // Inițializarea IO-urilor de control al ecranului LCD
+
         ESP_LOGD(TAG, "Install panel IO");
         esp_lcd_panel_io_spi_config_t io_config = {};
         io_config.cs_gpio_num = DISPLAY_CS_PIN;
@@ -399,7 +359,6 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
         io_config.lcd_param_bits = 8;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(LCD_SPI_HOST, &io_config, &panel_io));
 
-        // Inițializați cipul driverului ecranului LCD
         ESP_LOGD(TAG, "Install LCD driver");
         esp_lcd_panel_dev_config_t panel_config = {};
         panel_config.reset_gpio_num = DISPLAY_RST_PIN;
@@ -413,15 +372,16 @@ if (pressed & (1 << PCF_BTN_MIDDLE)) {
         esp_lcd_panel_invert_color(panel, DISPLAY_INVERT_COLOR);
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
+
         display_ = new SpiLcdDisplay(panel_io, panel, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                                     DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X,
-                                     DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+                                     DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y,
+                                     DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y,
+                                     DISPLAY_SWAP_XY);
     }
 
-    // 物联网初始化，添加对 AI 可见设备
     void InitializeTools() {
         static LampController lamp(LAMP_GPIO);
-        static DhtSensor dht(DHT11_PIN);
+        // 🔥 DHT scos de aici
     }
 
     void InitializePcf() {
@@ -440,7 +400,8 @@ public:
           volume_up_button_(VOLUME_UP_BUTTON_GPIO),
           volume_down_button_(VOLUME_DOWN_BUTTON_GPIO),
           backlight_up_button_(BACKLIGHT_UP_BUTTON_GPIO),
-          backlight_down_button_(BACKLIGHT_DOWN_BUTTON_GPIO) {
+          backlight_down_button_(BACKLIGHT_DOWN_BUTTON_GPIO)
+    {
         InitializeI2c();
         InitializePcf();
         InitializeBatteryMonitor();
@@ -451,13 +412,30 @@ public:
         InitializeTools();
         GetBacklight()->SetBrightness(100);
 
+        // 🔥 Creeăm task-ul DHT (dar nu îl pornim)
+        xTaskCreatePinnedToCore(DhtSensor::BackgroundTask,
+                                "dht_task",
+                                4096,
+                                &dht_,
+                                5,
+                                nullptr,
+                                0);
+
+        // 🔥 Controlăm DHT în funcție de starea device-ului
+        auto& app = Application::GetInstance();
+        app.OnStateChanged([this](DeviceState s) {
+            if (s == kDeviceStateIdle) {
+                dht_.Start();
+            } else {
+                dht_.Stop();
+            }
+        });
+
         xTaskCreatePinnedToCore(PcfButtonTask, "pcf_buttons", 4096, this, 5, nullptr, 0);
 
-        // Montezi SD cardul
-        vTaskDelay(pdMS_TO_TICKS(3000));  // 1 s pentru stabilizare alimentare SDMMC
+        vTaskDelay(pdMS_TO_TICKS(3000));
         sd_card_mount();
 
-        // Pornim task-ul de webserver o singurÄƒ datÄƒ
         if (!web_server_started_) {
             web_server_started_ = true;
             ESP_LOGI(TAG, "Creating WebServerTask...");
@@ -472,9 +450,12 @@ public:
 
     virtual AudioCodec* GetAudioCodec() override {
         static Es8311AudioCodec audio_codec(
-            codec_i2c_bus_, AUDIO_CODEC_I2C_NUM, AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
-            AUDIO_I2S_GPIO_MCLK, AUDIO_I2S_GPIO_BCLK, AUDIO_I2S_GPIO_WS, AUDIO_I2S_GPIO_DOUT,
-            AUDIO_I2S_GPIO_DIN, AUDIO_CODEC_PA_PIN, AUDIO_CODEC_ES8311_ADDR, true, true);
+            codec_i2c_bus_, AUDIO_CODEC_I2C_NUM,
+            AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
+            AUDIO_I2S_GPIO_MCLK, AUDIO_I2S_GPIO_BCLK,
+            AUDIO_I2S_GPIO_WS, AUDIO_I2S_GPIO_DOUT,
+            AUDIO_I2S_GPIO_DIN, AUDIO_CODEC_PA_PIN,
+            AUDIO_CODEC_ES8311_ADDR, true, true);
         return &audio_codec;
     }
 
