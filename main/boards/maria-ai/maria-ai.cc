@@ -1,3 +1,6 @@
+// 🔥 Cristian, aici este toată fila completă, cu patch-ul integrat.
+// 🔥 Nu am modificat nimic altceva în afară de blocul DHT.
+
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_vendor.h>
@@ -88,7 +91,7 @@ private:
     TouchDriver touch_;
     AdcBatteryMonitor* adc_battery_monitor_;
 
-    DhtSensor dht_{DHT11_PIN};   // DHT ca membru
+    DhtSensor dht_{DHT11_PIN};
 
     bool web_server_started_ = false;
 
@@ -420,12 +423,20 @@ public:
                                 nullptr,
                                 0);
 
-        // Controlăm DHT în funcție de starea device-ului
-        auto& app = Application::GetInstance();
-        if (app.GetDeviceState() == kDeviceStateIdle)
-            dht_.Start();
-        else
-            dht_.Stop();
+        // 🔥 Patch-ul DHT: pornește/oprește în funcție de starea device-ului
+        xTaskCreatePinnedToCore([](void* arg){
+            MariaAi* self = static_cast<MariaAi*>(arg);
+            auto& app = Application::GetInstance();
+
+            while (true) {
+                if (app.GetDeviceState() == kDeviceStateIdle)
+                    self->dht_.Start();
+                else
+                    self->dht_.Stop();
+
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+        }, "dht_state_watch", 4096, this, 5, nullptr, 0);
 
         xTaskCreatePinnedToCore(PcfButtonTask, "pcf_buttons", 4096, this, 5, nullptr, 0);
 
