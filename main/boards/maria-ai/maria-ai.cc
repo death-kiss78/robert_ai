@@ -88,7 +88,7 @@ private:
     TouchDriver touch_;
     AdcBatteryMonitor* adc_battery_monitor_;
 
-    DhtSensor dht_{DHT11_PIN};   // 🔥 DHT ca membru
+    DhtSensor dht_{DHT11_PIN};   // DHT ca membru
 
     bool web_server_started_ = false;
 
@@ -381,7 +381,6 @@ private:
 
     void InitializeTools() {
         static LampController lamp(LAMP_GPIO);
-        // 🔥 DHT scos de aici
     }
 
     void InitializePcf() {
@@ -412,7 +411,7 @@ public:
         InitializeTools();
         GetBacklight()->SetBrightness(100);
 
-        // 🔥 Creeăm task-ul DHT (dar nu îl pornim)
+        // Creeăm task-ul DHT
         xTaskCreatePinnedToCore(DhtSensor::BackgroundTask,
                                 "dht_task",
                                 4096,
@@ -421,15 +420,12 @@ public:
                                 nullptr,
                                 0);
 
-        // 🔥 Controlăm DHT în funcție de starea device-ului
+        // Controlăm DHT în funcție de starea device-ului
         auto& app = Application::GetInstance();
-        app.OnStateChanged([this](DeviceState s) {
-            if (s == kDeviceStateIdle) {
-                dht_.Start();
-            } else {
-                dht_.Stop();
-            }
-        });
+        if (app.GetDeviceState() == kDeviceStateIdle)
+            dht_.Start();
+        else
+            dht_.Stop();
 
         xTaskCreatePinnedToCore(PcfButtonTask, "pcf_buttons", 4096, this, 5, nullptr, 0);
 
