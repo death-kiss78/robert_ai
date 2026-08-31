@@ -156,7 +156,7 @@ private:
 
     void InitializeBatteryMonitor() {
         adc_battery_monitor_ =
-            new AdcBatteryMonitor(ADC_UNIT_1, BATTERY_ADC_CHANNEL, 200000, 200000, BATTERY_ADC_GPIO);
+            new AdcBatteryMonitor(ADC_UNIT_1, ADC_CHANNEL_8, 200000, 200000, GPIO_NUM_9);
     }
 
     static void TouchTask(void* arg) {
