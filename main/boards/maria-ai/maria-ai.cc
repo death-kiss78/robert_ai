@@ -1,6 +1,3 @@
-// 🔥 Cristian, aici este toată fila completă, cu patch-ul integrat.
-// 🔥 Nu am modificat nimic altceva în afară de blocul DHT.
-
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_vendor.h>
@@ -156,7 +153,7 @@ private:
 
     void InitializeBatteryMonitor() {
         adc_battery_monitor_ =
-            new AdcBatteryMonitor(ADC_UNIT_1, ADC_CHANNEL_8, 200000, 200000, GPIO_NUM_NC);
+            new AdcBatteryMonitor(ADC_UNIT_1, ADC_CHANNEL_8, 200000, 200000, GPIO_NUM_9);
     }
 
     static void TouchTask(void* arg) {
