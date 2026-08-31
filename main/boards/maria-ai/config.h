@@ -34,6 +34,9 @@
 // A MCP Test: Control a lamp
 #define LAMP_GPIO GPIO_NUM_3
 
+// ===================== DHT11 SENSOR =====================
+#define DHT11_PIN GPIO_NUM_2
+
 // pini pcf si atribuiri
 #define PCF_BTN_LAMP 0
 #define PCF_BTN_UP 1
@@ -78,7 +81,9 @@
 #define SD_MMC_D2 GPIO_NUM_48
 #define SD_MMC_D3 GPIO_NUM_47
 
-// ===================== DHT11 SENSOR =====================
-#define DHT11_PIN GPIO_NUM_2
+// Secțiunea Batery
+
+#define BATTERY_ADC_GPIO    GPIO_NUM_9
+#define BATTERY_ADC_CHANNEL ADC_CHANNEL_8
 
 #endif  // _BOARD_CONFIG_H_
