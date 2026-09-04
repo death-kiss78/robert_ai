@@ -4,8 +4,8 @@
 
 #define TAG "SingleLedRainbow"
 
-#define DEFAULT_BRIGHTNESS 100
-#define HIGH_BRIGHTNESS 255
+#define DEFAULT_BRIGHTNESS 10
+#define HIGH_BRIGHTNESS 25
 #define LOW_BRIGHTNESS 2
 
 #define BLINK_INFINITE -1

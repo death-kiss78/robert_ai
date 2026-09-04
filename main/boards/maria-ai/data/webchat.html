@@ -31,11 +31,6 @@
       </button>
   </div>
 
-  <!-- WAKE BUTTON -->
-  <button onclick="wakeXiao()" class="wake-btn">
-      <span class="material-icons">campaign</span> Wake Xiao
-  </button>
-
   <div class='arm-block'>
       <span>Powered by &copy; DeaTh KiSS part of AV3NTURA&trade;</span>
   </div>
@@ -51,34 +46,6 @@
 
 <script>
 /************************************************************
- *  WEBSOCKET
- ************************************************************/
-let ws = null;
-
-function initWebSocket() {
-    ws = new WebSocket("ws://" + window.location.host + "/ws");
-
-    ws.onopen = () => {
-        console.log("WebSocket connected");
-    };
-
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "xiao_reply") {
-            addMessage("Xiao", data.content);
-        }
-    };
-
-    ws.onclose = () => {
-        console.log("WebSocket closed, retrying...");
-        setTimeout(initWebSocket, 2000);
-    };
-}
-
-initWebSocket();
-
-/************************************************************
  *  CHAT UI
  ************************************************************/
 function addMessage(sender, text) {
@@ -93,7 +60,7 @@ function addMessage(sender, text) {
 }
 
 /************************************************************
- *  SEND TEXT TO ESP32
+ *  SEND TEXT TO ESP32 (HTTP POST /chat)
  ************************************************************/
 function sendText() {
     const msg = document.getElementById("chat_input").value.trim();
@@ -101,25 +68,26 @@ function sendText() {
 
     addMessage("Tu", msg);
 
-    fetch("/chat/send", {
+    fetch("/chat", {
         method: "POST",
-        body: JSON.stringify({ message: msg })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: msg })
+    })
+    .then(r => r.json())
+    .then(j => {
+        addMessage("Xiao", j.reply);
+    })
+    .catch(err => {
+        addMessage("System", "Eroare la comunicarea cu dispozitivul.");
+        console.error(err);
     });
 
     document.getElementById("chat_input").value = "";
 }
 
-/************************************************************
- *  WAKE XIAO
- ************************************************************/
-function wakeXiao() {
-    fetch("/chat/wake", { method: "POST" });
-    addMessage("System", "Xiao a fost trezit.");
-}
 </script>
 
 <button class="refresh-btn" onclick="location.reload()">&#128260;</button>
-
 <button style="width:42px;" class="reset-sticky" onclick="resetAndReload()">&#128260; RST</button>
 
 </body>
