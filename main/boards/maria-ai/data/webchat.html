@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" type="image/svg+xml" href="img/webchat.svg">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
 </head>
 
 <body>
@@ -14,7 +15,7 @@
   <img src="img/xiao.jpg" width="70%"><br>
 </div>
 
-<div class="container" align="center">
+<div class="container-chat" align="center">
 
   <h1>WebChat</h1>
 
@@ -26,10 +27,17 @@
   <!-- INPUT AREA -->
   <div class="chat-input-area">
       <input id="chat_input" type="text" placeholder="Scrie un mesaj..." class="chat-input">
-      <button onclick="sendText()" class="chat-send-btn">
-          <span class="material-icons">send</span>
-      </button>
+
+      <!-- SEND BUTTON + TOOLTIP FANCY -->
+      <div class="tooltip-container">
+          <button onclick="sendText()" class="chat-send-btn">
+              <span class="material-icons">send</span>
+          </button>
+          <div class="tooltip">Ctrl + Enter = send message</div>
+      </div>
   </div>
+
+  <br><br>
 
   <div class='arm-block'>
       <span>Powered by &copy; DeaTh KiSS part of AV3NTURA&trade;</span>
@@ -40,23 +48,29 @@
 <br>
 
 <div align="center">
-    <img src="img/home.svg" width="40"> 
-    <button onclick="location.href='index.html'">Home</button>
+      <div class="tooltip-container">
+     <button onclick="location.href='index.html'"><img src="img/home.svg" width="40"> Home</button>
+          <div class="tooltip">Go Home</div>
+      </div><br>
 </div>
 
 <script>
 /************************************************************
- *  CHAT UI
+ *  CHAT UI — AUTOSCROLL LA ULTIMUL MESAJ
  ************************************************************/
 function addMessage(sender, text) {
-    const box = document.getElementById("chat-messages");
+    const messages = document.getElementById("chat-messages");
+    const windowBox = document.getElementById("chat-window");
 
     const bubble = document.createElement("div");
-    bubble.className = sender === "Xiao" ? "bubble bubble-xiao" : "bubble bubble-user";
+    bubble.className = sender === "BOT" ? "bubble bubble-xiao" : "bubble bubble-user";
     bubble.innerText = sender + ": " + text;
 
-    box.appendChild(bubble);
-    box.scrollTop = box.scrollHeight;
+    messages.appendChild(bubble);
+
+    requestAnimationFrame(() => {
+        windowBox.scrollTop = windowBox.scrollHeight;
+    });
 }
 
 /************************************************************
@@ -75,7 +89,7 @@ function sendText() {
     })
     .then(r => r.json())
     .then(j => {
-        addMessage("Xiao", j.reply);
+        addMessage("BOT", j.reply);
     })
     .catch(err => {
         addMessage("System", "Eroare la comunicarea cu dispozitivul.");
@@ -85,6 +99,14 @@ function sendText() {
     document.getElementById("chat_input").value = "";
 }
 
+/************************************************************
+ *  HOTKEY: CTRL + ENTER pentru SEND
+ ************************************************************/
+document.getElementById("chat_input").addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && e.ctrlKey) {
+        sendText();
+    }
+});
 </script>
 
 <button class="refresh-btn" onclick="location.reload()">&#128260;</button>
