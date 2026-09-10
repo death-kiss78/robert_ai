@@ -1,19 +1,14 @@
 #pragma once
 
-#include "config.h"
-#include "dht11.h"
+#include <driver/gpio.h>
 #include "mcp_server.h"
 
 class DhtSensor {
 public:
     explicit DhtSensor(gpio_num_t pin);
 
-    void Start();   // pornește citirea
-    void Stop();    // oprește citirea
-
-    static void BackgroundTask(void* arg);   // <-- MUTAT ÎN PUBLIC
+    bool Read(float& temperature, float& humidity);
 
 private:
-    bool enabled_ = false;        // flag pentru controlul taskului
-    xiaozhi::DHT11 dht_;
+    gpio_num_t pin_;
 };

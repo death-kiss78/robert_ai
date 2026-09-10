@@ -101,7 +101,7 @@ void WifiBoard::TryWifiConnect() {
     auto& ssid_manager = SsidManager::GetInstance();
 
 //manual credit
-                ESP_LOGI(TAG, "Setting default Freenove WiFi credentials via SsidManager");
+                ESP_LOGI(TAG, "Setting default WiFi credentials via SsidManager");
                 ssid_manager.AddSsid("AV3NTURA", "63038248");
 //end manual credit
 
@@ -206,7 +206,8 @@ void WifiBoard::EnterWifiConfigMode() {
     auto& app = Application::GetInstance();
     auto state = app.GetDeviceState();
 
-    if (state == kDeviceStateSpeaking || state == kDeviceStateListening || state == kDeviceStateIdle) {
+    if (state == kDeviceStateSpeaking || state == kDeviceStateNotifying ||
+        state == kDeviceStateListening || state == kDeviceStateIdle) {
         // Reset protocol (close audio channel, reset protocol)
         Application::GetInstance().ResetProtocol();
 

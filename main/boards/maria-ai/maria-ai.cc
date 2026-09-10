@@ -88,8 +88,6 @@ private:
     TouchDriver touch_;
     AdcBatteryMonitor* adc_battery_monitor_;
 
-    DhtSensor dht_{DHT11_PIN};
-
     bool web_server_started_ = false;
 
     static void WebServerTask(void* param) {
@@ -115,7 +113,7 @@ private:
                 break;
             }
 
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(5000));
         }
 
         vTaskDelete(nullptr);
@@ -381,6 +379,7 @@ private:
 
     void InitializeTools() {
         static LampController lamp(LAMP_GPIO);
+		static DhtSensor dht(DHT11_PIN);
     }
 
     void InitializePcf() {
@@ -410,30 +409,6 @@ public:
         InitializeButtons();
         InitializeTools();
         GetBacklight()->SetBrightness(100);
-
-        // Creeăm task-ul DHT
-        xTaskCreatePinnedToCore(DhtSensor::BackgroundTask,
-                                "dht_task",
-                                4096,
-                                &dht_,
-                                5,
-                                nullptr,
-                                0);
-
-        // 🔥 Patch-ul DHT: pornește/oprește în funcție de starea device-ului
-        xTaskCreatePinnedToCore([](void* arg){
-            MariaAi* self = static_cast<MariaAi*>(arg);
-            auto& app = Application::GetInstance();
-
-            while (true) {
-                if (app.GetDeviceState() == kDeviceStateIdle)
-                    self->dht_.Start();
-                else
-                    self->dht_.Stop();
-
-                vTaskDelay(pdMS_TO_TICKS(1000));
-            }
-        }, "dht_state_watch", 4096, this, 5, nullptr, 0);
 
         xTaskCreatePinnedToCore(PcfButtonTask, "pcf_buttons", 4096, this, 5, nullptr, 0);
 

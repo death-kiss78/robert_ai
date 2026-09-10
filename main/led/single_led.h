@@ -26,15 +26,12 @@ private:
     int blink_interval_ms_ = 0;
     esp_timer_handle_t blink_timer_ = nullptr;
 
-    uint16_t rainbow_hue_ = 0;   // 🔥 pentru efectul rainbow
-
     void StartBlinkTask(int times, int interval_ms);
     void OnBlinkTimer();
 
     void BlinkOnce();
     void Blink(int times, int interval_ms);
     void StartContinuousBlink(int interval_ms);
-    void StartRainbow();          // 🔥 nou
     void TurnOn();
     void TurnOff();
     void SetColor(uint8_t r, uint8_t g, uint8_t b);

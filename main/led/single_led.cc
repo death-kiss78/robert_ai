@@ -4,32 +4,12 @@
 
 #define TAG "SingleLed"
 
-#define DEFAULT_BRIGHTNESS 100
-#define HIGH_BRIGHTNESS 255
+#define DEFAULT_BRIGHTNESS 4
+#define HIGH_BRIGHTNESS 16
 #define LOW_BRIGHTNESS 2
 
 #define BLINK_INFINITE -1
 
-// 🔥 Conversie HSV → RGB
-static void hsvToRgb(uint16_t h, uint8_t s, uint8_t v,
-                     uint8_t &r, uint8_t &g, uint8_t &b)
-{
-    float hh = h / 60.0f;
-    int i = (int)hh;
-    float ff = hh - i;
-    float p = v * (1.0f - s / 255.0f);
-    float q = v * (1.0f - (s / 255.0f) * ff);
-    float t = v * (1.0f - (s / 255.0f) * (1.0f - ff));
-
-    switch (i) {
-        case 0: r = v; g = t; b = p; break;
-        case 1: r = q; g = v; b = p; break;
-        case 2: r = p; g = v; b = t; break;
-        case 3: r = p; g = q; b = v; break;
-        case 4: r = t; g = p; b = v; break;
-        default: r = v; g = p; b = q; break;
-    }
-}
 
 SingleLed::SingleLed(gpio_num_t gpio) {
     if (gpio == GPIO_NUM_NC) {
@@ -71,6 +51,7 @@ SingleLed::~SingleLed() {
     }
 }
 
+
 void SingleLed::SetColor(uint8_t r, uint8_t g, uint8_t b) {
     r_ = r;
     g_ = g;
@@ -78,8 +59,10 @@ void SingleLed::SetColor(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void SingleLed::TurnOn() {
-    if (led_strip_ == nullptr) return;
-
+    if (led_strip_ == nullptr) {
+        return;
+    }
+    
     std::lock_guard<std::mutex> lock(mutex_);
     esp_timer_stop(blink_timer_);
     led_strip_set_pixel(led_strip_, 0, r_, g_, b_);
@@ -87,7 +70,9 @@ void SingleLed::TurnOn() {
 }
 
 void SingleLed::TurnOff() {
-    if (led_strip_ == nullptr) return;
+    if (led_strip_ == nullptr) {
+        return;
+    }
 
     std::lock_guard<std::mutex> lock(mutex_);
     esp_timer_stop(blink_timer_);
@@ -107,105 +92,75 @@ void SingleLed::StartContinuousBlink(int interval_ms) {
 }
 
 void SingleLed::StartBlinkTask(int times, int interval_ms) {
-    if (led_strip_ == nullptr) return;
+    if (led_strip_ == nullptr) {
+        return;
+    }
 
     std::lock_guard<std::mutex> lock(mutex_);
     esp_timer_stop(blink_timer_);
-
+    
     blink_counter_ = times * 2;
     blink_interval_ms_ = interval_ms;
     esp_timer_start_periodic(blink_timer_, interval_ms * 1000);
 }
 
-// 🔥 Funcția pentru efectul rainbow
-void SingleLed::StartRainbow() {
-    if (led_strip_ == nullptr) return;
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    esp_timer_stop(blink_timer_);
-
-    blink_counter_ = BLINK_INFINITE;
-    blink_interval_ms_ = 50;  // viteză smooth
-
-    esp_timer_start_periodic(blink_timer_, blink_interval_ms_ * 1000);
-}
-
 void SingleLed::OnBlinkTimer() {
     std::lock_guard<std::mutex> lock(mutex_);
-
-    // 🔥 RAINBOW MODE
-    if (blink_counter_ == BLINK_INFINITE) {
-        uint8_t r, g, b;
-        hsvToRgb(rainbow_hue_, 255, HIGH_BRIGHTNESS, r, g, b);
-        rainbow_hue_ = (rainbow_hue_ + 3) % 360;
-
-        led_strip_set_pixel(led_strip_, 0, r, g, b);
-        led_strip_refresh(led_strip_);
-        return;
-    }
-
-    // 🔥 BLINK NORMAL
     blink_counter_--;
     if (blink_counter_ & 1) {
         led_strip_set_pixel(led_strip_, 0, r_, g_, b_);
         led_strip_refresh(led_strip_);
     } else {
         led_strip_clear(led_strip_);
+
         if (blink_counter_ == 0) {
             esp_timer_stop(blink_timer_);
         }
     }
 }
 
+
 void SingleLed::OnStateChanged() {
     auto& app = Application::GetInstance();
     auto device_state = app.GetDeviceState();
-
     switch (device_state) {
         case kDeviceStateStarting:
             SetColor(0, 0, DEFAULT_BRIGHTNESS);
             StartContinuousBlink(100);
             break;
-
         case kDeviceStateWifiConfiguring:
             SetColor(0, 0, DEFAULT_BRIGHTNESS);
             StartContinuousBlink(500);
             break;
-
         case kDeviceStateIdle:
-            StartRainbow();   // 🔥 RAINBOW în IDLE
+            TurnOff();
             break;
-
         case kDeviceStateConnecting:
-            SetColor(HIGH_BRIGHTNESS, 0, 0);
+            SetColor(0, 0, DEFAULT_BRIGHTNESS);
             TurnOn();
             break;
-
         case kDeviceStateListening:
         case kDeviceStateAudioTesting:
             if (app.IsVoiceDetected()) {
-                SetColor(0, 0, HIGH_BRIGHTNESS);
+                SetColor(HIGH_BRIGHTNESS, 0, 0);
             } else {
-                SetColor(0, 0, HIGH_BRIGHTNESS);
+                SetColor(LOW_BRIGHTNESS, 0, 0);
             }
             TurnOn();
             break;
-
         case kDeviceStateSpeaking:
-            SetColor(0, HIGH_BRIGHTNESS, 0);
+        case kDeviceStateNotifying:
+            SetColor(0, DEFAULT_BRIGHTNESS, 0);
             TurnOn();
             break;
-
         case kDeviceStateUpgrading:
             SetColor(0, DEFAULT_BRIGHTNESS, 0);
             StartContinuousBlink(100);
             break;
-
         case kDeviceStateActivating:
             SetColor(0, DEFAULT_BRIGHTNESS, 0);
             StartContinuousBlink(500);
             break;
-
         default:
             ESP_LOGW(TAG, "Unknown led strip event: %d", device_state);
             return;

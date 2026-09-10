@@ -64,7 +64,6 @@ public:
      * Check if in WiFi config mode
      */
     bool IsInWifiConfigMode() const;
-
 };
 
 #endif // WIFI_BOARD_H
