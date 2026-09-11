@@ -5,7 +5,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "filemanager.h"
-// #include "chat.h"
+#include "chat.h"
 
 static const char* TAG = "http_server";
 static const char* base_path = "/sdcard";
@@ -144,7 +144,7 @@ httpd_handle_t start_webserver(void) {
         ESP_LOGI(TAG, "Registering handlers...");
         httpd_register_uri_handler(server, &index_uri);
         sdcard_register_routes(server);                   // API SD routes
-                                                          //		chat_register_routes(server);
+		chat_register_routes(server);
         httpd_register_uri_handler(server, &static_uri);  // static files
 
         return server;

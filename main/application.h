@@ -118,7 +118,15 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     AudioService& GetAudioService() { return audio_service_; }
-    
+
+    Protocol* GetProtocol() { return protocol_.get(); }
+
+    using ChatMessageCallback = std::function<void(const char* role, const std::string& text)>;
+
+    void RegisterChatMessageCallback(ChatMessageCallback cb) {
+        chat_message_callback_ = std::move(cb);
+    }
+
     /**
      * Reset protocol resources (thread-safe)
      * Can be called from any task to release resources allocated after network connected
@@ -143,6 +151,7 @@ private:
     NotifyPlayer notify_player_;
     uint32_t notification_playback_id_ = 0;
     std::unique_ptr<Ota> ota_;
+ChatMessageCallback chat_message_callback_;
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
 

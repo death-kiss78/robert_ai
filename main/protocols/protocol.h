@@ -19,10 +19,10 @@ struct AudioStreamPacket {
 struct BinaryProtocol2 {
     uint16_t version;
     uint16_t type;          // Message type (0: OPUS, 1: JSON)
-    uint32_t reserved;      // Reserved for future use
-    uint32_t timestamp;     // Timestamp in milliseconds (used for server-side AEC)
-    uint32_t payload_size;  // Payload size in bytes
-    uint8_t payload[];      // Payload data
+    uint32_t reserved;
+    uint32_t timestamp;
+    uint32_t payload_size;
+    uint8_t payload[];
 } __attribute__((packed));
 
 struct BinaryProtocol3 {
@@ -37,7 +37,7 @@ enum AbortReason { kAbortReasonNone, kAbortReasonWakeWordDetected };
 enum ListeningMode {
     kListeningModeAutoStop,
     kListeningModeManualStop,
-    kListeningModeRealtime  // 需要 AEC 支持
+    kListeningModeRealtime
 };
 
 class Protocol {
@@ -61,11 +61,36 @@ public:
     virtual void CloseAudioChannel(bool send_goodbye = true) = 0;
     virtual bool IsAudioChannelOpened() const = 0;
     virtual bool SendAudio(std::unique_ptr<AudioStreamPacket> packet) = 0;
+
+    // Wake word
     virtual void SendWakeWordDetected(const std::string& wake_word);
+
+    // Listening control
     virtual void SendStartListening(ListeningMode mode);
     virtual void SendStopListening();
+
+    // Abort
     virtual void SendAbortSpeaking(AbortReason reason);
+
+    // MCP
     virtual void SendMcpMessage(const std::string& message);
+
+    // Manual text injection (listen/detect/text)
+    bool SendListenDetect(const std::string& text) {
+        cJSON* root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "session_id", session_id_.c_str());
+        cJSON_AddStringToObject(root, "type", "listen");
+        cJSON_AddStringToObject(root, "state", "detect");
+        cJSON_AddStringToObject(root, "mode", "manual");
+        cJSON_AddStringToObject(root, "text", text.c_str());
+
+        char* rendered = cJSON_PrintUnformatted(root);
+        bool ok = SendText(rendered);
+
+        cJSON_free(rendered);
+        cJSON_Delete(root);
+        return ok;
+    }
 
 protected:
     std::function<void(const cJSON* root)> on_incoming_json_;
@@ -89,4 +114,4 @@ protected:
     static void AddTextFontCapabilities(cJSON* root);
 };
 
-#endif  // PROTOCOL_H
+#endif // PROTOCOL_H
